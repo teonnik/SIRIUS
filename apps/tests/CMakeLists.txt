@@ -10,6 +10,13 @@ foreach(_test ${_tests})
   install(TARGETS ${_test} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
 endforeach()
 
+list(APPEND CMAKE_PREFIX_PATH "~/software/cosma")
+find_package(cosma REQUIRED)
+
+add_executable(test_wf_inner_cosma test_wf_inner_cosma.cpp)
+SIRIUS_SETUP_TARGET(test_wf_inner_cosma)
+target_link_libraries(test_wf_inner_cosma PRIVATE cosma::cosma)
+
 #set(_test test_gemm)
 #add_executable("${_test}_real" "${_test}.cpp")
 #SIRIUS_SETUP_TARGET(${_test})
