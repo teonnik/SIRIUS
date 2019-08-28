@@ -31,3 +31,5 @@ latex/
 output*.json
 
 *.h5
+
+CMakeLists.txt.user

@@ -107,5 +107,10 @@ if(USE_ROCM)
     FLAGS ${DEFINITIONS_GENERATOR} ${INCLUDE_DIR_GENERATOR} "-Wno-macro-redefined" OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
+if(USE_COSMA)
+  target_link_libraries(sirius PRIVATE cosma::cosma)
+  target_compile_definitions(sirius PRIVATE USE_COSMA)
+endif()
+
 install(DIRECTORY ./ DESTINATION "${CMAKE_INSTALL_PREFIX}/include/sirius" FILES_MATCHING REGEX ".*(hpp|h)$")
 install(FILES ${PROJECT_BINARY_DIR}/src/version.hpp DESTINATION "${CMAKE_INSTALL_PREFIX}/include/sirius")

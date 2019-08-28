@@ -23,6 +23,7 @@ set(USE_VDWXC OFF CACHE BOOL "use libvdwxc for van der Walls corrections")
 set(USE_MKL OFF CACHE BOOL "use Intel MKL")
 set(USE_CRAY_LIBSCI OFF CACHE BOOL "use LAPACK/SCALAPACK from Cray LIBSCI")
 set(USE_SCALAPACK OFF CACHE BOOL "use scalapack")
+set(USE_COSMA OFF CACHE BOOL "use COSMA")
 set(BUILD_TESTS OFF CACHE BOOL "build tests")
 set(GPU_MODEL "none" CACHE STRING "The target GPU architecture; one of {none,P100,V100,G10x0}")
 set(DEBUG_MEMORY_POOL OFF CACHE BOOL "explicit debugging of memory pool")
@@ -172,6 +173,12 @@ if(USE_ROCM)
     include_directories(src/SDDK/GPU/hipblas_port)
 endif()
 
+# Append the installation path to CMAKE_PREFIX_PATH.
+#
+if(USE_COSMA)
+    find_package(cosma REQUIRED)
+endif()
+
 # add required libraries
 set(SYSTEM_LIBRARIES "${SYSTEM_LIBRARIES};${MPI_CXX_LIBRARIES};${LIBXC_LIBRARIES};${LIBSPG_LIBRARIES}")
 
@@ -269,6 +276,10 @@ MACRO(SIRIUS_SETUP_TARGET _target)
 
   if(OpenMP_CXX_FOUND)
     target_link_libraries(${_target} PUBLIC OpenMP::OpenMP_CXX)
+  endif()
+
+  if(USE_COSMA)
+    target_link_libraries(${_target} PRIVATE cosma::cosma)
   endif()
 
   # target_link_libraries(${_target} PRIVATE GSL::gsl)
