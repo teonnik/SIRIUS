@@ -10,6 +10,9 @@ foreach(_test ${_tests})
   install(TARGETS ${_test} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
 endforeach()
 
+add_executable(bench_wf_inner bench_wf_inner.cpp)
+SIRIUS_SETUP_TARGET(bench_wf_inner)
+
 #set(_test test_gemm)
 #add_executable("${_test}_real" "${_test}.cpp")
 #SIRIUS_SETUP_TARGET(${_test})

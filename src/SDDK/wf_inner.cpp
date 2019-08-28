@@ -40,8 +40,6 @@ namespace sddk {
 template <typename T>
 grid2grid::grid_layout<T> get_wf_grid_layout(Wave_functions& phi, int i_spin, int index_of_start_wf, int num_wfs)
 {
-    PROFILE("sddk::inner(cosma)")
-
     using namespace grid2grid;
     assert(i_spin == 0 || i_spin == 1);
 
@@ -185,6 +183,7 @@ template <typename T>
 void inner(sddk::memory_t mem, sddk::linalg_t la, int spin_param, sddk::Wave_functions& bra, int bra_index, int m,
            sddk::Wave_functions& ket, int ket_index, int n, sddk::dmatrix<T>& result, int irow0, int jcol0)
 {
+    PROFILE("sddk::inner(cosma)")
     // assert_communicators_compatibility(bra, ket, result);
     MPI_Comm const comm = bra.comm().mpi_comm();
     char trans_A        = 'C';
