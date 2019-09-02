@@ -1,8 +1,10 @@
 #include <sirius.h>
+#include <chrono>
+#include <ctime>    
 
 using namespace sirius;
 
-void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
+void test_wf_inner(std::string title, std::string description, int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
                    linalg_t la__, memory_t mem_bra__, memory_t mem_ket__, memory_t mem_o__)
 {
     std::unique_ptr<BLACS_grid> blacs_grid;
@@ -25,12 +27,6 @@ void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutof
     Gvec gvec(M, cutoff__, Communicator::world(), false);
 
     Gvec_partition gvp(gvec, Communicator::world(), Communicator::self());
-
-    if (Communicator::world().rank() == 0) {
-        printf("m: %i\n", 2 * num_bands__);
-        printf("n: %i\n", 2 * num_bands__);
-        printf("k: %i\n", gvec.num_gvec());
-    }
 
     int nsp{1};
     Wave_functions bra(gvp, 2 * num_bands__, mem_bra__, nsp);
@@ -70,6 +66,7 @@ void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutof
     using clock_t   = std::chrono::high_resolution_clock;
     using seconds_t = std::chrono::duration<double>;
 
+    std::cout << "date,title,description,m,n,k,P,cutoff,bands,time [s]\n";
     for (int i = 0; i <= num_iters; ++i) {
         Communicator::world().barrier();
         auto t_start = clock_t::now();
@@ -86,7 +83,24 @@ void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutof
         // Skip warm-up run
         //
         if (Communicator::world().rank() == 0 && i != 0) {
-            std::cout << "Run #" << i << " : " << seconds_t(t_end - t_start).count() << " [s]" << '\n';
+            auto t_run = seconds_t(t_end - t_start).count();
+            auto end_time = std::chrono::system_clock::to_time_t(t_end);
+            auto timedate = std::ctime(&end_time);
+            int m = 2 * num_bands__;
+            int n = m;
+            int k = gvec.num_gvec();
+            int P = Communicator::world().size();
+
+            std::cout << timedate << ","
+                      << title << "," 
+                      << description << ","
+                      << m << ","
+                      << n << ","
+                      << k << ","
+                      << P << ","
+                      << cutoff__ << ","
+                      << t_run << ","
+                      << num_bands__ << "\n";
         }
     }
 }
@@ -96,6 +110,9 @@ void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutof
 int main(int argn, char** argv)
 {
     cmd_args args;
+    args.register_key("--title", "{string} the benchmark title");
+    args.register_key("--description", "{string} background information about the benchmark to record motivation");
+
     args.register_key("--num_iters=", "{int} number of profiling iterations");
 
     args.register_key("--mpi_grid_dims=", "{int int} dimensions of MPI grid");
@@ -114,6 +131,9 @@ int main(int argn, char** argv)
         args.print_help();
         return 0;
     }
+    auto title         = args.value<std::string>("title", "N/A");
+    auto description   = args.value<std::string>("description", "N/A");
+
     auto num_iters     = args.value<int>("num_iters", 4);
     auto mpi_grid_dims = args.value<std::vector<int>>("mpi_grid_dims", {1, 1});
     auto cutoff        = args.value<double>("cutoff", 8.0);
@@ -126,11 +146,12 @@ int main(int argn, char** argv)
 
     sirius::initialize(1);
 
-    test_wf_inner(num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
+    test_wf_inner(title, description, num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
 
     Communicator::world().barrier();
     if (Communicator::world().rank() == 0) {
         utils::timer::print();
     }
+    // reset_device__ = false;
     sirius::finalize();
 }
