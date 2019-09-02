@@ -4,7 +4,7 @@
 
 using namespace sirius;
 
-void test_wf_inner(std::string title, std::string description, int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
+void test_wf_inner(std::string title, std::string motivation, int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
                    linalg_t la__, memory_t mem_bra__, memory_t mem_ket__, memory_t mem_o__)
 {
     std::unique_ptr<BLACS_grid> blacs_grid;
@@ -66,7 +66,7 @@ void test_wf_inner(std::string title, std::string description, int num_iters, st
     using clock_t   = std::chrono::high_resolution_clock;
     using seconds_t = std::chrono::duration<double>;
 
-    std::cout << "date,title,description,m,n,k,P,cutoff,bands,time [s]\n";
+    std::cout << "timestamp,title,motivation,m,n,k,P,cutoff,bands,time [s]\n";
     for (int i = 0; i <= num_iters; ++i) {
         Communicator::world().barrier();
         auto t_start = clock_t::now();
@@ -84,16 +84,21 @@ void test_wf_inner(std::string title, std::string description, int num_iters, st
         //
         if (Communicator::world().rank() == 0 && i != 0) {
             auto t_run = seconds_t(t_end - t_start).count();
-            auto end_time = std::chrono::system_clock::to_time_t(t_end);
-            auto timedate = std::ctime(&end_time);
+
+            // Timestamp
+            //
+            auto now_time = std::chrono::system_clock::to_time_t(t_end);
+            auto gmt_time = gmtime(&now_time);
+            auto timestamp = std::put_time(gmt_time, "%Y-%m-%d %H:%M:%S");
+
             int m = 2 * num_bands__;
             int n = m;
             int k = gvec.num_gvec();
             int P = Communicator::world().size();
 
-            std::cout << timedate << ","
+            std::cout << timestamp << ","
                       << title << "," 
-                      << description << ","
+                      << motivation << ","
                       << m << ","
                       << n << ","
                       << k << ","
@@ -110,8 +115,8 @@ void test_wf_inner(std::string title, std::string description, int num_iters, st
 int main(int argn, char** argv)
 {
     cmd_args args;
-    args.register_key("--title", "{string} the benchmark title");
-    args.register_key("--description", "{string} background information about the benchmark to record motivation");
+    args.register_key("--title=", "{string} the benchmark title");
+    args.register_key("--motivation=", "{string} background information about the benchmark to record motivation");
 
     args.register_key("--num_iters=", "{int} number of profiling iterations");
 
@@ -132,7 +137,7 @@ int main(int argn, char** argv)
         return 0;
     }
     auto title         = args.value<std::string>("title", "N/A");
-    auto description   = args.value<std::string>("description", "N/A");
+    auto motivation    = args.value<std::string>("motivation", "N/A");
 
     auto num_iters     = args.value<int>("num_iters", 4);
     auto mpi_grid_dims = args.value<std::vector<int>>("mpi_grid_dims", {1, 1});
@@ -146,7 +151,7 @@ int main(int argn, char** argv)
 
     sirius::initialize(1);
 
-    test_wf_inner(title, description, num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
+    test_wf_inner(title, motivation, num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
 
     Communicator::world().barrier();
     if (Communicator::world().rank() == 0) {
