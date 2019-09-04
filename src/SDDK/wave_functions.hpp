@@ -60,6 +60,7 @@ class spin_range
   private:
     int idx_;
     std::vector<int> v_;
+
   public:
     explicit spin_range(int idx__)
         : idx_(idx__)
@@ -316,6 +317,23 @@ class Wave_functions
         return offset_mt_coeffs_[ialoc__];
     }
 
+    int const* mt_offsets() const noexcept
+    {
+        return mt_coeffs_distr_.offsets.data();
+    }
+
+    int const* pw_offsets() const noexcept
+    {
+        return gkvecp_.gvec().gvec_offsets_arr();
+    }
+
+    // Returns the GLOBAL size of the Muffin-tin componenet(s).
+    //
+    int mt_size() const noexcept
+    {
+        return (has_mt()) ? mt_coeffs_distr_.size() : 0;
+    }
+
     /// Copy values from another wave-function.
     /** \param [in] pu   Type of processging unit which copies data.
      *  \param [in] n    Number of wave-functions to copy.
@@ -324,8 +342,7 @@ class Wave_functions
      *  \param [in] i0   Starting index of wave-functions in src.
      *  \param [in] jspn Spin component on destination wave-functions.
      *  \param [in] j0   Starting index of wave-functions in destination. */
-    void copy_from(device_t pu__, int n__, Wave_functions const& src__, int ispn__, int i0__, int jspn__,
-                          int j0__);
+    void copy_from(device_t pu__, int n__, Wave_functions const& src__, int ispn__, int i0__, int jspn__, int j0__);
 
     void copy_from(Wave_functions const& src__, int n__, int ispn__, int i0__, int jspn__, int j0__);
 
@@ -370,7 +387,6 @@ class Wave_functions
         return preferred_memory_t_;
     }
 };
-
 
 } // namespace sddk
 

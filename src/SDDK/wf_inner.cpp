@@ -26,142 +26,12 @@
 
 #ifdef USE_COSMA
 #include <cosma/multiply.hpp>
-#include <grid2grid/transform.hpp>
+#include <cosma_grid_maps.hpp>
 #endif
 
 namespace sddk {
 
 #ifdef USE_COSMA
-
-// The number of wave functions (num_wfs / `m` or `n`) is much smaller than the dimensionality of the space (`k`).
-//
-// Row / column indexing starts from zero. The end is not included.
-//
-template <typename T>
-grid2grid::grid_layout<T> get_wf_grid_layout(Wave_functions& phi, int i_spin, int index_of_start_wf, int num_wfs)
-{
-    using namespace grid2grid;
-    assert(i_spin == 0 || i_spin == 1);
-
-    int this_rank         = phi.comm().rank();
-    int num_procs         = phi.comm().size();
-    int num_basis_vectors = phi.gkvec().num_gvec();
-
-    // The rows are split in slabs starting from process 0 in ascending order. The slabs may be of differnt size.
-    //
-    std::vector<int> rows_split;
-    rows_split.reserve(num_procs + 1);
-    for (int rank = 0; rank < num_procs; ++rank) {
-        rows_split.push_back(phi.gkvec().gvec_offset(rank));
-    }
-    rows_split.push_back(num_basis_vectors);
-
-    // Columns are not split.
-    //
-    std::vector<int> cols_split{0, num_wfs};
-
-    // Create a map between ranks and grid.
-    //
-    std::vector<std::vector<int>> owners(num_procs, std::vector<int>(1));
-    for (int rank = 0; rank < num_procs; ++rank) {
-        owners[rank][0] = rank;
-    }
-
-    // Initialize a local 2D view of data.
-    //
-    // Note: In SIRIUS' case there is only one local block.
-    //
-    // clang-format off
-    std::vector<block<T>> loc_blocks{
-        {{rows_split[this_rank], rows_split[this_rank + 1]},
-         {0, num_wfs},
-         {this_rank, 0},
-         phi.pw_coeffs(i_spin).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf)
-        }
-    };
-    return grid2grid::grid_layout<T> {
-            {
-                {
-                    std::move(rows_split),
-                    std::move(cols_split)
-                },
-                std::move(owners),
-                num_procs
-            },
-            {
-                std::move(loc_blocks)
-            }
-        };
-    // clang-format on
-}
-
-// `dmatrix` inherits from a column-major 2D mdarray. It also holds an object of the BLACS_grid clss which is built on
-// the MPI_grid class. MPI_grid uses the default MPI row-major rank ordering.
-//
-template <typename T>
-grid2grid::grid_layout<T> get_dmatrix_grid_layout(dmatrix<T>& result, int irow0__, int jcol0__, int submatrix_row_size,
-                                                  int submatrix_col_size)
-{
-    using namespace grid2grid::scalapack;
-
-    int this_rank  = result.comm().rank();
-    char transpose = 'N';
-    T* data        = result.at(sddk::memory_t::host);
-
-    matrix_dim m_dim{result.num_rows(), result.num_cols()}; // global matrix size
-    block_dim b_dim{result.bs_row(), result.bs_col()};      // block dimension
-
-    elem_grid_coord ij{irow0__ + 1, jcol0__ + 1};                // start of submatrix
-    matrix_dim subm_dim{submatrix_row_size, submatrix_col_size}; // dim of submatrix
-
-    // Note: Using BLACS routines directly might not be the best way of retrieving relevant information. SIRIUS can work
-    // without the ScaLAPACK back-end.
-    //
-    int const* descr = result.descriptor();
-    int blacs_ctx    = descr[1];
-    int lld          = descr[8];                  // local leading dimension
-    rank_grid_coord rank_src{descr[6], descr[7]}; // rank src
-
-    int rank_grid_rows;
-    int rank_grid_cols;
-    int this_rank_row;
-    int this_rank_col;
-    Cblacs_gridinfo(blacs_ctx, &rank_grid_rows, &rank_grid_cols, &this_rank_row, &this_rank_col);
-
-    rank_decomposition r_grid{rank_grid_rows, rank_grid_cols};
-
-    // From `blacs_grid.hpp` it appears that the ordering is always column-major.
-    //
-    // SIRIUS enforces that BLACS and MPI grids have the same ordering.
-    //
-    ordering rank_grid_ordering{ordering::row_major};
-
-    return grid2grid::get_scalapack_grid(lld, m_dim, ij, subm_dim, b_dim, r_grid, rank_grid_ordering, transpose,
-                                         rank_src, data, this_rank);
-}
-
-// Succeeds if `bra`, `ket` and `result` are at least MPI_CONGRUENT. This guarantees that they have identical
-// MPI_Group's even if their MPI contexts differ.
-//
-// Note that MPI_SIMILAR requires remapping process ranks between communicators and is currently not supported.
-//
-template <typename T>
-void assert_communicators_compatibility(Wave_functions const& bra, Wave_functions const& ket, dmatrix<T> const& result)
-{
-    int bra_ket_comp_bit;
-    MPI_Comm_compare(bra.comm().mpi_comm(), ket.comm().mpi_comm(), &bra_ket_comp_bit);
-    if (!(bra_ket_comp_bit == MPI_IDENT || bra_ket_comp_bit == MPI_CONGRUENT)) {
-        std::cout << "[ERROR] inner(): `bra` and `ket` have incompatible communicators!\n";
-        std::terminate();
-    }
-
-    int bra_result_comp_bit;
-    MPI_Comm_compare(bra.comm().mpi_comm(), result.comm().mpi_comm(), &bra_result_comp_bit);
-    if (!(bra_result_comp_bit == MPI_IDENT || bra_result_comp_bit == MPI_CONGRUENT)) {
-        std::cout << "[ERROR] inner(): `bra` and `result` have incompatible communicators!\n";
-        std::terminate();
-    }
-}
 
 // There are `m` wavefunctions starting from index `i0` and `n` wavefunctions starting from index `j0`. Only portion
 // of the resulting `dmatrix` is updated at every call.
@@ -192,20 +62,14 @@ void inner(sddk::memory_t mem, sddk::linalg_t la, int spin_param, sddk::Wave_fun
     T beta              = 0;
     int k               = bra.gkvec().num_gvec();
 
-    for (int i_spin : get_spins(spin_param)) {
-        // The layouts for both spin components are equivalent, but the data pointers are different, hence we can't
-        // refactor the following out of the loop (atm).
-        //
-        grid2grid::grid_layout<T> A_layout = get_wf_grid_layout<T>(bra, i_spin, bra_index, m);
-        grid2grid::grid_layout<T> B_layout = get_wf_grid_layout<T>(ket, i_spin, ket_index, n);
-        grid2grid::grid_layout<T> C_layout = get_dmatrix_grid_layout(result, irow0, jcol0, m, n);
-        // A_layout.transpose_or_conjugate(trans_A);
+    // The layouts for both spin components are equivalent, but the data pointers are different, hence we can't
+    // refactor the following out of the loop (atm).
+    //
+    grid2grid::grid_layout<T> A_layout = get_wf_grid_layout<T>(bra, spin_param, bra_index, m);
+    grid2grid::grid_layout<T> B_layout = get_wf_grid_layout<T>(ket, spin_param, ket_index, n);
+    grid2grid::grid_layout<T> C_layout = get_dmatrix_grid_layout(result, irow0, jcol0, m, n);
 
-        cosma::multiply_using_layout(A_layout, B_layout, C_layout, m, n, k, alpha, beta, trans_A, trans_B, comm);
-        beta = 1;
-
-        // TODO: mt coeffs
-    }
+    cosma::multiply_using_layout(A_layout, B_layout, C_layout, m, n, k, alpha, beta, trans_A, trans_B, comm);
 }
 
 #else

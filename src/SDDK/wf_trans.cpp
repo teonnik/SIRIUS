@@ -25,7 +25,23 @@
 
 #include "wf_trans.hpp"
 
+#ifdef USE_COSMA
+#include <cosma/multiply.hpp>
+#include <cosma_grid_maps.hpp>
+#endif
+
 namespace sddk {
+
+#ifdef USE_COSMA
+
+template <typename T>
+void toma(memory_t mem__, linalg_t la__, int ispn__, double alpha__, std::vector<Wave_functions*> wf_in__, int i0__,
+          int m__, dmatrix<T>& mtrx__, int irow0__, int jcol0__, double beta__, std::vector<Wave_functions*> wf_out__,
+          int j0__, int n__)
+{
+}
+
+#endif
 
 namespace { // local functions -> no internal linkage
 template <typename T>

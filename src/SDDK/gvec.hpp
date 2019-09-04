@@ -91,7 +91,7 @@ inline void deserialize(serializer& s__, z_column_descriptor& zcol__)
 inline void serialize(serializer& s__, std::vector<z_column_descriptor> const& zcol__)
 {
     serialize(s__, zcol__.size());
-    for (auto& e: zcol__) {
+    for (auto& e : zcol__) {
         serialize(s__, e);
     }
 }
@@ -257,7 +257,8 @@ class Gvec
      *  \param [in] comm        Total communicator which is used to distribute G-vectors
      *  \param [in] reduce_gvec True if G-vectors need to be reduced by inversion symmetry.
      */
-    Gvec(matrix3d<double> M__, double Gmax__, FFT3D_grid const& fft_grid__, Communicator const& comm__, bool reduce_gvec__)
+    Gvec(matrix3d<double> M__, double Gmax__, FFT3D_grid const& fft_grid__, Communicator const& comm__,
+         bool reduce_gvec__)
         : Gmax_(Gmax__)
         , lattice_vectors_(M__)
         , comm_(comm__)
@@ -369,6 +370,11 @@ class Gvec
     inline int count() const
     {
         return gvec_count(comm().rank());
+    }
+
+    int const* gvec_offsets_arr() const noexcept
+    {
+        return gvec_distr_.offsets.data();
     }
 
     /// Offset (in the global index) of G-vectors for a fine-grained distribution.
@@ -518,10 +524,10 @@ class Gvec
 
     void send_recv(Communicator const& comm__, int source__, int dest__, Gvec& gv__) const;
 
-    //friend std::unique_ptr<Gvec> send_recv(Gvec const& gv__, Communicator const& comm__, int source__, int dest__);
+    // friend std::unique_ptr<Gvec> send_recv(Gvec const& gv__, Communicator const& comm__, int source__, int dest__);
 };
 
-//inline std::unique_ptr<Gvec> send_recv(Gvec const& gv__, Communicator const& comm__, int source__, int dest__)
+// inline std::unique_ptr<Gvec> send_recv(Gvec const& gv__, Communicator const& comm__, int source__, int dest__)
 //{
 //    std::unique_ptr<Gvec> gvout(new Gvec(gv__.comm()));
 //
@@ -724,7 +730,6 @@ class Gvec_shells
     std::map<vector3d<int>, int> idx_gvec;
 
   public:
-
     Gvec_shells(Gvec const& gvec__);
 
     inline void print_gvec() const
