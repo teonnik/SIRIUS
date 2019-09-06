@@ -317,21 +317,14 @@ class Wave_functions
         return offset_mt_coeffs_[ialoc__];
     }
 
-    int const* mt_offsets() const noexcept
+    int const* mt_counts() const noexcept
     {
-        return mt_coeffs_distr_.offsets.data();
+        return mt_coeffs_distr_.counts.data();
     }
 
-    int const* pw_offsets() const noexcept
+    int const* pw_counts() const noexcept
     {
-        return gkvecp_.gvec().gvec_offsets_arr();
-    }
-
-    // Returns the GLOBAL size of the Muffin-tin componenet(s).
-    //
-    int mt_size() const noexcept
-    {
-        return (has_mt()) ? mt_coeffs_distr_.size() : 0;
+        return gkvecp_.gvec().gvec_counts_arr();
     }
 
     /// Copy values from another wave-function.

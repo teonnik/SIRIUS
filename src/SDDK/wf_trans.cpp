@@ -35,13 +35,27 @@ namespace sddk {
 #ifdef USE_COSMA
 
 template <typename T>
-void toma(memory_t mem__, linalg_t la__, int ispn__, double alpha__, std::vector<Wave_functions*> wf_in__, int i0__,
-          int m__, dmatrix<T>& mtrx__, int irow0__, int jcol0__, double beta__, std::vector<Wave_functions*> wf_out__,
-          int j0__, int n__)
+void transform(memory_t mem, linalg_t la, int ispn, double alpha, std::vector<Wave_functions*> wf_in, int i0, int m,
+               dmatrix<T>& mtrx, int irow0, int jcol0, double beta, std::vector<Wave_functions*> wf_out, int j0, int n)
 {
+    (void)mem;
+    (void)la;
+
+    // assert_communicators_compatibility(bra, ket, result);
+
+    // 1. Neither `A` or `B` is transposed.
+    // 2. All wave functions guaranteed to be distributed in exactly the same way.
+    //
+    grid2grid::grid_layout<T> A_layout = get_wf_grid_layout<T>(wf_in, ispn, i0, m);
+    grid2grid::grid_layout<T> B_layout = get_dmatrix_grid_layout(mtrx, irow0, jcol0, m, n);
+    grid2grid::grid_layout<T> C_layout = get_wf_grid_layout<T>(wf_out, ispn, j0, n);
+
+    MPI_Comm const comm = wf_in[0]->comm().mpi_comm();
+
+    cosma::multiply_using_layout(A_layout, B_layout, C_layout, T{alpha}, T{beta}, comm);
 }
 
-#endif
+#else
 
 namespace { // local functions -> no internal linkage
 template <typename T>
@@ -321,11 +335,18 @@ void transform(memory_t mem__, linalg_t la__, int ispn__, double alpha__, std::v
     }
 }
 
+#endif
+
 // instantiate for required types
+
+// COSMA doesn't support mixed precision calculations yet.
+//
+#ifndef USE_COSMA
 template void transform<double>(memory_t mem__, linalg_t la__, int ispn__, double alpha__,
                                 std::vector<Wave_functions*> wf_in__, int i0__, int m__, dmatrix<double>& mtrx__,
                                 int irow0__, int jcol0__, double beta__, std::vector<Wave_functions*> wf_out__,
                                 int j0__, int n__);
+#endif
 
 template void transform<double_complex>(memory_t mem__, linalg_t la__, int ispn__, double alpha__,
                                         std::vector<Wave_functions*> wf_in__, int i0__, int m__,

@@ -372,9 +372,9 @@ class Gvec
         return gvec_count(comm().rank());
     }
 
-    int const* gvec_offsets_arr() const noexcept
+    int const* gvec_counts_arr() const noexcept
     {
-        return gvec_distr_.offsets.data();
+        return gvec_distr_.counts.data();
     }
 
     /// Offset (in the global index) of G-vectors for a fine-grained distribution.

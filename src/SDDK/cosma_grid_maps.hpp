@@ -12,81 +12,69 @@ namespace sddk {
 // Note: spin_param = 0 means spin UP.
 //
 template <typename T>
-void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_wf, std::vector<int>& cpt_offsets_arr,
-                      std::vector<int const*>& slab_offsets_arr, std::vector<T*>& loc_blk_data_arr)
+void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_col,
+                      std::vector<int const*>& slab_sizes_arr, std::vector<T*>& loc_blk_data_arr)
 {
-    int num_pw_rows = phi.gkvec().num_gvec();
-    int num_mt_rows = phi.mt_size();
-
     // All 4 components.
     //
     if (spin_param == 2 && phi.has_mt()) {
-        cpt_offsets_arr  = {0, num_pw_rows, num_pw_rows + num_mt_rows, 2 * num_pw_rows + num_mt_rows};
-        slab_offsets_arr = {
-            phi.pw_offsets(),
-            phi.mt_offsets(),
-            phi.pw_offsets(),
-            phi.mt_offsets(),
+        slab_sizes_arr = {
+            phi.pw_counts(),
+            phi.mt_counts(),
+            phi.pw_counts(),
+            phi.mt_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
-            phi.mt_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
-            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
-            phi.mt_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
+            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            phi.mt_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            phi.mt_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
         };
 
         // Both spins, no Muffin-tin
         //
     } else if (spin_param == 2) {
-        cpt_offsets_arr = {
-            0,
-            num_pw_rows,
-        };
-        slab_offsets_arr = {
-            phi.pw_offsets(),
-            phi.pw_offsets(),
+        slab_sizes_arr = {
+            phi.pw_counts(),
+            phi.pw_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
-            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
+            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
         };
 
         // One spin with Muffin-tin
         //
     } else if (phi.has_mt()) {
-        cpt_offsets_arr = {
-            0,
-            num_pw_rows,
-        };
-        slab_offsets_arr = {
-            phi.pw_offsets(),
-            phi.mt_offsets(),
+        slab_sizes_arr = {
+            phi.pw_counts(),
+            phi.mt_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
-            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
+            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            phi.mt_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
         };
 
         // One spin no Muffin-tin
         //
     } else {
-        cpt_offsets_arr = {
-            0,
-        };
-        slab_offsets_arr = {
-            phi.pw_offsets(),
+        slab_sizes_arr = {
+            phi.pw_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_wf),
+            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
         };
     }
 }
 
-// The number of wave functions (num_wfs / `m` or `n`) is much smaller than the dimensionality of the space (`k`).
+// Wafe function columns are atomic bands, rows are coefficients of basis expansion. The number of columns is much
+// smaller than the number of rows.
+//
+// Wave functions can be stacked into a single matrix.
 //
 // Row / column indexing starts from zero. The end is not included.
 //
-// The wave function is composed from up to 4 components. The componenets are stacked on top of each other. Each
+// The wave function is composed from up to four components. The componenets are stacked on top of each other. Each
 // component is distributed among all processes in a block non-cyclic manner. Each process holds one block (slab) of
 // each component. Slabs are not guaranteed to be of the same size.
 //
@@ -99,13 +87,20 @@ void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_wf
 // Each rank stores a single block from each component. Local blocks are stored in column-major.
 //
 template <typename T>
-grid2grid::grid_layout<T> get_wf_grid_layout(Wave_functions& phi, int spin_param, int index_of_start_wf, int num_cols)
+grid2grid::grid_layout<T> get_wf_grid_layout(std::vector<Wave_functions*> phi_arr, int spin_param,
+                                             int index_of_start_wf, int num_cols)
 {
     using namespace grid2grid;
-    assert(spin_param == 0 || spin_param == 1 || spin_param == 2);
 
-    int this_rank = phi.comm().rank();
-    int num_procs = phi.comm().size();
+    assert(spin_param == 0 || spin_param == 1 || spin_param == 2);
+    assert(!phi_arr.empty());
+
+    // Note: All wavefunctions have the same distribution and componenets
+    //
+    int this_rank = phi_arr[0]->comm().rank();
+    int num_procs = phi_arr[0]->comm().size();
+    bool have_mt  = phi_arr[0]->has_mt();
+    int num_wfs   = static_cast<int>(phi_arr.size());
 
     // Columns are not split.
     //
@@ -115,58 +110,68 @@ grid2grid::grid_layout<T> get_wf_grid_layout(Wave_functions& phi, int spin_param
     //
     int num_spin_cpt = (spin_param != 2) ? 1 : 2;
     int num_pw_cpt   = num_spin_cpt;
-    int num_mt_cpt   = (phi.has_mt()) ? num_spin_cpt : 0;
+    int num_mt_cpt   = (have_mt) ? num_spin_cpt : 0;
     int num_wf_cpt   = num_mt_cpt + num_pw_cpt;
 
-    int num_pw_rows = phi.gkvec().num_gvec();
-    int num_mt_rows = phi.mt_size();
-
-    std::vector<int> rows_split(num_procs * num_wf_cpt + 1);
-    rows_split[num_procs * num_wf_cpt] = num_pw_cpt * num_pw_rows + num_mt_cpt * num_mt_rows; // last split delimiter
-    std::vector<std::vector<int>> owners(rows_split.size() - 1, std::vector<int>(1));
-    std::vector<block<T>> loc_blocks;
-    loc_blocks.reserve(num_wf_cpt);
-
-    std::vector<int> cpt_rows_offsets_arr;
-    std::vector<int const*> slab_offsets_arr;
-    std::vector<T*> loc_blk_data_arr;
-    init_wf_cpt_arrs(phi, spin_param, index_of_start_wf, cpt_rows_offsets_arr, slab_offsets_arr, loc_blk_data_arr);
-
-    // Iterate over each componenet.
+    // Assumption : Both the Muffin-tin and Plane-wave components are distributed over all process.
     //
-    for (int i_cpt = 0; i_cpt < num_wf_cpt; ++i_cpt) {
-        int const* slab_offsets = slab_offsets_arr[i_cpt];
-        int cpt_offset          = cpt_rows_offsets_arr[i_cpt];
-        T* loc_blk_data         = loc_blk_data_arr[i_cpt];
+    int num_delims = num_procs * num_wf_cpt * num_wfs;
+    std::vector<int> rows_split(num_delims + 1);
+    std::vector<std::vector<int>> owners(num_delims, std::vector<int>(1));
+    std::vector<block<T>> loc_blocks;
+    loc_blocks.reserve(num_wf_cpt * num_wfs);
 
-        // Split among all processes and note that components are stacked.
+    // Iterate over each wave function bundle.
+    //
+    for (int i_wf = 0; i_wf < num_wfs; ++i_wf) {
+        Wave_functions* phi = phi_arr[i_wf];
+
+        // The start delimiter of the wave function
         //
-        int split_offset = i_cpt * num_procs;
+        int wf_split = i_wf * num_wf_cpt * num_procs;
 
-        // For each slab
+        std::vector<int const*> slab_sizes_arr;
+        std::vector<T*> loc_blk_data_arr;
+        init_wf_cpt_arrs(*phi, spin_param, index_of_start_wf, slab_sizes_arr, loc_blk_data_arr);
+
+        // For each componenet within the wavefunction
         //
-        for (int rank = 0; rank < num_procs; ++rank) {
-            int i_split = split_offset + rank;
+        rows_split[0] = 0;
+        for (int i_cpt = 0; i_cpt < num_wf_cpt; ++i_cpt) {
+            int const* slabs_sizes = slab_sizes_arr[i_cpt];
+            T* loc_blk_data        = loc_blk_data_arr[i_cpt];
 
-            // Add the offset of the current component to the offset of the slab within it
+            // The start delimiter of the componenet
             //
-            rows_split[i_split] = cpt_offset + slab_offsets[rank];
+            int cpt_split = wf_split + i_cpt * num_procs;
 
-            // There is only one column
+            // For each slab within the component
             //
-            owners[i_split][0] = rank;
-        }
+            for (int rank = 0; rank < num_procs; ++rank) {
+                int slab_split = cpt_split + rank;
 
-        // clang-format off
-        loc_blocks.push_back(
-            {
-                {rows_split[split_offset + this_rank], rows_split[split_offset + this_rank + 1]},
-                {0, num_cols},
-                {split_offset + this_rank, 0},
-                loc_blk_data
+                // Save the start delimiter of the next slab
+                //
+                rows_split[slab_split + 1] = rows_split[slab_split] + slabs_sizes[rank];
+
+                // There is only one column
+                //
+                owners[slab_split][0] = rank;
             }
-        );
-        // clang-format on
+
+            // TODO: check if lld for the local blocs is correct
+
+            // clang-format off
+            loc_blocks.push_back(
+                {
+                    {rows_split[cpt_split + this_rank], rows_split[cpt_split + this_rank + 1]},
+                    {0, num_cols},
+                    {cpt_split + this_rank, 0},
+                    loc_blk_data
+                }
+            );
+            // clang-format on
+        }
     }
 
     // clang-format off

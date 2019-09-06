@@ -53,23 +53,25 @@ template <typename T>
 void inner(sddk::memory_t mem, sddk::linalg_t la, int spin_param, sddk::Wave_functions& bra, int bra_index, int m,
            sddk::Wave_functions& ket, int ket_index, int n, sddk::dmatrix<T>& result, int irow0, int jcol0)
 {
+    (void)mem;
+    (void)la;
+
     PROFILE("sddk::inner(cosma)")
     // assert_communicators_compatibility(bra, ket, result);
-    MPI_Comm const comm = bra.comm().mpi_comm();
-    char trans_A        = 'C';
-    char trans_B        = 'N';
-    T const alpha       = 1;
-    T beta              = 0;
-    int k               = bra.gkvec().num_gvec();
 
     // The layouts for both spin components are equivalent, but the data pointers are different, hence we can't
     // refactor the following out of the loop (atm).
     //
-    grid2grid::grid_layout<T> A_layout = get_wf_grid_layout<T>(bra, spin_param, bra_index, m);
-    grid2grid::grid_layout<T> B_layout = get_wf_grid_layout<T>(ket, spin_param, ket_index, n);
+    grid2grid::grid_layout<T> A_layout = get_wf_grid_layout<T>({&bra}, spin_param, bra_index, m);
+    grid2grid::grid_layout<T> B_layout = get_wf_grid_layout<T>({&ket}, spin_param, ket_index, n);
     grid2grid::grid_layout<T> C_layout = get_dmatrix_grid_layout(result, irow0, jcol0, m, n);
 
-    cosma::multiply_using_layout(A_layout, B_layout, C_layout, m, n, k, alpha, beta, trans_A, trans_B, comm);
+    MPI_Comm const comm = bra.comm().mpi_comm();
+    T const alpha       = 1;
+    T beta              = 0;
+    A_layout.transpose_or_conjugate('C');
+
+    cosma::multiply_using_layout(A_layout, B_layout, C_layout, alpha, beta, comm);
 }
 
 #else
