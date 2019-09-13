@@ -278,15 +278,11 @@ void orthogonalize(memory_t mem__, linalg_t la__, int ispn__, std::vector<Wave_f
     }
 }
 
-// COSMA doesn't support mixed precision calculations yet.
-//
-#ifndef USE_COSMA
 template void orthogonalize<double, 0, 2>(memory_t mem__, linalg_t la__, int ispn__, std::vector<Wave_functions*> wfs__,
                                           int N__, int n__, dmatrix<double>& o__, Wave_functions& tmp__);
 
 template void orthogonalize<double, 0, 0>(memory_t mem__, linalg_t la__, int ispn__, std::vector<Wave_functions*> wfs__,
                                           int N__, int n__, dmatrix<double>& o__, Wave_functions& tmp__);
-#endif
 
 template void orthogonalize<double_complex, 0, 2>(memory_t mem__, linalg_t la__, int ispn__,
                                                   std::vector<Wave_functions*> wfs__, int N__, int n__,

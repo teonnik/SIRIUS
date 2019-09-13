@@ -339,14 +339,10 @@ void transform(memory_t mem__, linalg_t la__, int ispn__, double alpha__, std::v
 
 // instantiate for required types
 
-// COSMA doesn't support mixed precision calculations yet.
-//
-#ifndef USE_COSMA
 template void transform<double>(memory_t mem__, linalg_t la__, int ispn__, double alpha__,
                                 std::vector<Wave_functions*> wf_in__, int i0__, int m__, dmatrix<double>& mtrx__,
                                 int irow0__, int jcol0__, double beta__, std::vector<Wave_functions*> wf_out__,
                                 int j0__, int n__);
-#endif
 
 template void transform<double_complex>(memory_t mem__, linalg_t la__, int ispn__, double alpha__,
                                         std::vector<Wave_functions*> wf_in__, int i0__, int m__,

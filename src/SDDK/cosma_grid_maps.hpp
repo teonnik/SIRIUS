@@ -4,10 +4,14 @@
 
 #include <grid2grid/transform.hpp>
 
+#include <type_traits>
+
 namespace sddk {
 
 // 1. Initializes / Retrieves component and slab offsets within the stacked matrix.
 // 2. Retrieves pointers to slab data
+// 3. Cast to T as the wave function data is always complex but T can also be `double` in which case the real and
+//    imaginary components are interpreted as separate elements.
 //
 // Note: spin_param = 0 means spin UP.
 //
@@ -25,10 +29,10 @@ void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_co
             phi.mt_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
-            phi.mt_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
-            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
-            phi.mt_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            reinterpret_cast<T*>(phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
+            reinterpret_cast<T*>(phi.mt_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
+            reinterpret_cast<T*>(phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
+            reinterpret_cast<T*>(phi.mt_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
         };
 
         // Both spins, no Muffin-tin
@@ -39,8 +43,8 @@ void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_co
             phi.pw_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
-            phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            reinterpret_cast<T*>(phi.pw_coeffs(0).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
+            reinterpret_cast<T*>(phi.pw_coeffs(1).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
         };
 
         // One spin with Muffin-tin
@@ -51,8 +55,8 @@ void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_co
             phi.mt_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
-            phi.mt_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            reinterpret_cast<T*>(phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
+            reinterpret_cast<T*>(phi.mt_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
         };
 
         // One spin no Muffin-tin
@@ -62,7 +66,7 @@ void init_wf_cpt_arrs(Wave_functions& phi, int spin_param, int index_of_start_co
             phi.pw_counts(),
         };
         loc_blk_data_arr = {
-            phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col),
+            reinterpret_cast<T*>(phi.pw_coeffs(spin_param).prime().at(phi.preferred_memory_t(), 0, index_of_start_col)),
         };
     }
 }
@@ -101,6 +105,11 @@ grid2grid::grid_layout<T> get_wf_grid_layout(std::vector<Wave_functions*> phi_ar
     int num_procs = phi_arr[0]->comm().size();
     bool have_mt  = phi_arr[0]->has_mt();
     int num_wfs   = static_cast<int>(phi_arr.size());
+
+    // When `T` is double, the rows have to be multipled by 2. The real and imaginary cpts are interpreted as separate
+    // elements stacked on top of each other.
+    //
+    constexpr int elem_type_factor = (std::is_same<T, double>::value) ? 2 : 1;
 
     // Columns are not split.
     //
@@ -152,14 +161,12 @@ grid2grid::grid_layout<T> get_wf_grid_layout(std::vector<Wave_functions*> phi_ar
 
                 // Save the start delimiter of the next slab
                 //
-                rows_split[slab_split + 1] = rows_split[slab_split] + slabs_sizes[rank];
+                rows_split[slab_split + 1] = rows_split[slab_split] + slabs_sizes[rank] * elem_type_factor;
 
                 // There is only one column
                 //
                 owners[slab_split][0] = rank;
             }
-
-            // TODO: check if lld for the local blocs is correct
 
             // clang-format off
             loc_blocks.push_back(

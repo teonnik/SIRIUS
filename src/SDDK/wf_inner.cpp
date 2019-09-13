@@ -434,13 +434,9 @@ void inner(memory_t mem__, linalg_t la__, int ispn__, Wave_functions& bra__, int
 }
 #endif
 
-// COSMA doesn't support mixed precision calculations yet.
-//
-#ifndef USE_COSMA
 template void inner<double>(memory_t mem__, linalg_t la__, int ispn__, Wave_functions& bra__, int i0__, int m__,
                             Wave_functions& ket__, int j0__, int n__, dmatrix<double>& result__, int irow0__,
                             int jcol0__);
-#endif
 
 template void inner<double_complex>(memory_t mem__, linalg_t la__, int ispn__, Wave_functions& bra__, int i0__, int m__,
                                     Wave_functions& ket__, int j0__, int n__, dmatrix<double_complex>& result__,
