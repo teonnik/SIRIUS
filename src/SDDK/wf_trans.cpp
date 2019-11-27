@@ -38,6 +38,8 @@ template <typename T>
 void transform(memory_t mem, linalg_t la, int ispn, double alpha, std::vector<Wave_functions*> wf_in, int i0, int m,
                dmatrix<T>& mtrx, int irow0, int jcol0, double beta, std::vector<Wave_functions*> wf_out, int j0, int n)
 {
+    PROFILE("sddk::transform(cosma)");
+
     (void)mem;
     (void)la;
 

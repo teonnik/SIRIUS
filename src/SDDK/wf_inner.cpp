@@ -140,6 +140,8 @@ void inner(memory_t mem__, linalg_t la__, int ispn__, Wave_functions& bra__, int
 {
     PROFILE("sddk::inner");
 
+    printf("m=%d, n=%d, k=%d", m__, n__, bra__.pw_counts() + bra__.mt_counts() );
+
     auto& comm = bra__.comm();
 
     auto sddk_pp = utils::get_env<int>("SDDK_PRINT_PERFORMANCE");

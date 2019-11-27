@@ -143,9 +143,9 @@ inline void finalize(bool call_mpi_fin__ = true, bool reset_device__ = true, boo
         cublas::xt::destroy_handle();
 #endif
         acc::destroy_streams();
-        if (reset_device__) {
-            acc::reset();
-        }
+        //if (reset_device__) {
+        //    acc::reset();
+        //}
     }
     if (fftw_cleanup__) {
         fftw_cleanup();
