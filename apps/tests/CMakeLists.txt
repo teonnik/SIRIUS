@@ -12,6 +12,9 @@ endforeach()
 
 add_executable(bench_wf_inner bench_wf_inner.cpp)
 SIRIUS_SETUP_TARGET(bench_wf_inner)
+#
+#add_executable(bench_wf_ortho bench_wf_ortho.cpp)
+#SIRIUS_SETUP_TARGET(bench_wf_ortho)
 
 #set(_test test_gemm)
 #add_executable("${_test}_real" "${_test}.cpp")

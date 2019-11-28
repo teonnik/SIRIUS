@@ -1,10 +1,9 @@
 #include <sirius.h>
 #include <chrono>
-#include <ctime>    
 
 using namespace sirius;
 
-void test_wf_inner(std::string title, std::string motivation, int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
+void test_wf_inner(int num_iters, std::vector<int> mpi_grid_dims__, double cutoff__, int num_bands__, int bs__,
                    linalg_t la__, memory_t mem_bra__, memory_t mem_ket__, memory_t mem_o__)
 {
     std::unique_ptr<BLACS_grid> blacs_grid;
@@ -23,12 +22,15 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
     // The cutoff selects a sphere of unit blocks on the grid
     //
 
-    /* create G-vectors */
+    // Create G-vectors
+    //
     Gvec gvec(M, cutoff__, Communicator::world(), false);
-
     Gvec_partition gvp(gvec, Communicator::world(), Communicator::self());
 
-    int nsp{1};
+    // Initialize `bra` (A matrix)
+    //
+    constexpr int nsp  = 1;
+    constexpr int ispn = 0;
     Wave_functions bra(gvp, 2 * num_bands__, mem_bra__, nsp);
 
     for (int is = 0; is < nsp; is++) {
@@ -46,6 +48,8 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
         }
     }
 
+    // Initialize `ket` (B matrix)
+    //
     Wave_functions ket(gvp, 2 * num_bands__, mem_ket__, nsp);
     if (is_device_memory(mem_ket__)) {
         for (int ispn = 0; ispn < nsp; ispn++) {
@@ -56,6 +60,8 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
         ket.copy_from(bra, 2 * num_bands__, ispn, 0, ispn, 0);
     }
 
+    // Initialize `ovlp` (C matrix)
+    //
     dmatrix<double_complex> ovlp(2 * num_bands__, 2 * num_bands__, *blacs_grid, bs__, bs__);
 
     if (is_device_memory(mem_o__)) {
@@ -66,18 +72,9 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
     using clock_t   = std::chrono::high_resolution_clock;
     using seconds_t = std::chrono::duration<double>;
 
-    std::cout << "timestamp,title,motivation,m,n,k,P,cutoff,bands,time [s]\n";
     for (int i = 0; i <= num_iters; ++i) {
-        Communicator::world().barrier();
         auto t_start = clock_t::now();
-
-        sddk::inner(mem_o__, la__, 0, bra, 0, num_bands__, ket, 0, num_bands__, ovlp, 0, 0);
-        sddk::inner(mem_o__, la__, 0, bra, 0, num_bands__, ket, num_bands__, num_bands__, ovlp, 0, num_bands__);
-        sddk::inner(mem_o__, la__, 0, bra, num_bands__, num_bands__, ket, 0, num_bands__, ovlp, num_bands__, 0);
-        sddk::inner(mem_o__, la__, 0, bra, num_bands__, num_bands__, ket, num_bands__, num_bands__, ovlp, num_bands__,
-                    num_bands__);
-
-        Communicator::world().barrier();
+        sddk::inner(mem_o__, la__, ispn, bra, 0, 2 * num_bands__, ket, 0, 2 * num_bands__, ovlp, 0, 0);
         auto t_end = clock_t::now();
 
         // Skip warm-up run
@@ -85,27 +82,12 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
         if (Communicator::world().rank() == 0 && i != 0) {
             auto t_run = seconds_t(t_end - t_start).count();
 
-            // Timestamp
-            //
-            auto now_time = std::chrono::system_clock::to_time_t(t_end);
-            auto gmt_time = gmtime(&now_time);
-            auto timestamp = std::put_time(gmt_time, "%Y-%m-%d %H:%M:%S");
-
             int m = 2 * num_bands__;
             int n = m;
             int k = gvec.num_gvec();
             int P = Communicator::world().size();
 
-            std::cout << timestamp << ","
-                      << title << "," 
-                      << motivation << ","
-                      << m << ","
-                      << n << ","
-                      << k << ","
-                      << P << ","
-                      << cutoff__ << ","
-                      << t_run << ","
-                      << num_bands__ << "\n";
+            printf("t[s]=%.5f m=%d n=%d k=%d p=%d bands=%d cutoff=%.5f \n", t_run, m, n, k, P, num_bands__, cutoff__);
         }
     }
 }
@@ -115,8 +97,6 @@ void test_wf_inner(std::string title, std::string motivation, int num_iters, std
 int main(int argn, char** argv)
 {
     cmd_args args;
-    args.register_key("--title=", "{string} the benchmark title");
-    args.register_key("--motivation=", "{string} background information about the benchmark to record motivation");
 
     args.register_key("--num_iters=", "{int} number of profiling iterations");
 
@@ -136,22 +116,21 @@ int main(int argn, char** argv)
         args.print_help();
         return 0;
     }
-    auto title         = args.value<std::string>("title", "N/A");
-    auto motivation    = args.value<std::string>("motivation", "N/A");
 
-    auto num_iters     = args.value<int>("num_iters", 4);
     auto mpi_grid_dims = args.value<std::vector<int>>("mpi_grid_dims", {1, 1});
     auto cutoff        = args.value<double>("cutoff", 8.0);
-    auto bs            = args.value<int>("bs", 32);
     auto num_bands     = args.value<int>("num_bands", 100);
-    auto la            = get_linalg_t(args.value<std::string>("linalg_t", "blas"));
-    auto mem_bra       = get_memory_t(args.value<std::string>("mem_bra", "host"));
-    auto mem_ket       = get_memory_t(args.value<std::string>("mem_ket", "host"));
-    auto mem_o         = get_memory_t(args.value<std::string>("mem_o", "host"));
+
+    auto num_iters = args.value<int>("num_iters", 4);
+    auto bs        = args.value<int>("bs", 32);
+    auto la        = get_linalg_t(args.value<std::string>("linalg_t", "blas"));
+    auto mem_bra   = get_memory_t(args.value<std::string>("mem_bra", "host"));
+    auto mem_ket   = get_memory_t(args.value<std::string>("mem_ket", "host"));
+    auto mem_o     = get_memory_t(args.value<std::string>("mem_o", "host"));
 
     sirius::initialize(1);
 
-    test_wf_inner(title, motivation, num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
+    test_wf_inner(num_iters, mpi_grid_dims, cutoff, num_bands, bs, la, mem_bra, mem_ket, mem_o);
 
     Communicator::world().barrier();
     if (Communicator::world().rank() == 0) {
