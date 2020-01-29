@@ -235,3 +235,5 @@ add_subdirectory(apps/upf)
 add_subdirectory(apps/utils)
 add_subdirectory(python_module)
 add_subdirectory(doc)
+
+add_subdirectory(teo)
